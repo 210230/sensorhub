@@ -147,6 +147,8 @@ class SensorManager(object):
     def __init__(self, device, baudrate):
         self.device = device
         self.baudrate = baudrate
+        self.cpuid = None
+        self.sensormap = SENSORMAP
         self._dev = serial.Serial(port=device,
                                   baudrate=baudrate,
                                   parity=serial.PARITY_NONE,
@@ -167,6 +169,33 @@ class SensorManager(object):
         self._updating = False
         self._xmodem_sending = False
         self._modem = YMODEM(self.modem_read, self.modem_write)
+
+    def load_config(self):
+        if not self.cpuid:
+            return
+
+        cfg = 'dev%s.conf' % self.cpuid
+        if not os.path.exists(cfg):
+            logging.info('device config file %s not found' % cfg)
+            cfg = 'devcommon.conf'
+            if not os.path.exists(cfg):
+                logging.info('common config file %s not found' % cfg)
+                return
+         #    reg, description,      bus, node, addr, size, default
+         self.sensormap = []
+         for line in file(cfg):
+            if line.startswith('#') or not line.strip():
+                continue  # comments or empty line
+            data = line.split(',').strip()
+            if len(data) != 7:
+                logging.info('ignore illegal line %s' % line)
+                continue
+            # TODO: check the correctness
+            self.sensormap.append(data)
+
+        logging.info('updated sensor map from file %s' % cfg)
+        for d in self.sensormap:
+            logging.info(str(d))
 
     def write_data(self, data):
         logging.debug('<send>: %s' % data)
@@ -357,6 +386,8 @@ class SensorManager(object):
 
     def update_modbus_db(self, resp):
         logging.info('update modbus data %s' % resp)
+        if 'CPUID' in resp:
+            self.cpuid = resp['CPUID']
         if 'data' not in resp:
             logging.debug('ignore failure message')
             return
@@ -395,6 +426,13 @@ class SensorManager(object):
             if timeout <= 0:
                 break
         return None
+
+     def read_cpuid(self):
+        self.write_data('get_cpuid_code()')
+        timeout = 2
+        while self.is_busy() and timeout > 0:
+            time.sleep(1)
+            timeout -= 1
 
     def do_polling(self, sensor_mapping):
         # bus, node, addr, num, retry, 
@@ -448,6 +486,15 @@ def main():
 
     try:
         sm.start_service()
+        retry = 3
+        while not sm.cpuid and retry > 0:
+            sm.read_cpuid()
+            retry -= 1
+        if not sm.cpuid:
+            logging.warning('failed to read CPUID, board is broken')
+        else:
+            logging.info('CPUID = %s' % sm.cpuid)
+            sm.load_config()
         while True:
             # polling all configured sensors
             for id, name in ALL_SENSOR_IDS:
