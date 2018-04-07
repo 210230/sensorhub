@@ -122,15 +122,18 @@ headers = {
     "Content-type": "application/x-www-form-urlencoded",
     "Accept": "text/plain"
 }
-url = "http://10.0.0.121:8080/ZhiHuiNongYe/uploaddata.do"
+#url = "http://10.0.0.121:8080/ZhiHuiNongYe/uploaddata.do"
+url = "http://www.ttyoa.com:8080/ZhiHuiNongYe/uploaddata.do"
 def upload(msg = None):
     conn = None
+    response = None
     try:
         if not msg:
-            msg = {"device":"dst18014322",
-                   "timestamp":"YYMMDDHHMMSS",
-                   "bus1":{"raws":["HH","HH","",""]},
-                   "bus2":{"raws":["HH","HH"]}}
+            msg = {"device": "123456781234567812345678",
+                   "timestamp": time.time(),
+                   "bus": 1, "node": 1, "command": "read",
+                   "data": [0.12, 0.34, 56, 789],
+                   "status": 0}
         msg2 = {'uploaddata': str(msg)}
         data = urllib.urlencode(msg2)
         req = urllib2.Request(url, data)
@@ -141,6 +144,7 @@ def upload(msg = None):
     finally:
         if conn:
             conn.close()
+    return response
 
 class SensorManager(object):
     def __init__(self, device, baudrate):
@@ -194,10 +198,12 @@ class SensorManager(object):
             self.sensormap.append(data)
 
         if self.sensormap:
-            #last offset + size + extra 4 bytes
-            len = self.sensormap[-1][0] + self.sensormap[-1][5] + 4
-            if len > self._reg_size:
+            #last offset + its size
+            len = self.sensormap[-1][0] + self.sensormap[-1][5]
+            if len > 0 and len < 1024:
                 self._reg_size = len
+            else:
+                logging.warning('invalid register len %d' % len)
 
         logging.info('updated sensor map from file %s' % cfg)
         for d in self.sensormap:
@@ -419,6 +425,15 @@ class SensorManager(object):
                 logging.info('failed to read bus %d, node %d, addr %d, size %d' % (
                              desc, bus, node, addr, size))
             time.sleep(1)
+
+    def do_upload(self):
+        msg = {"device": self.cpuid,
+               "timestamp": time.time(),
+               "bus": 1, "node": 1, "command": "read",
+               "data": self._slave.get_values('0', 0, self._reg_size),
+               "status": 0}
+        ret = upload(msg)
+        logging.info(ret)
 
     def start_service(self):
         self._running = True
