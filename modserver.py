@@ -62,21 +62,20 @@ download_message_default = {
    "data": [0x54, 0x48]  # byte array, maxlen=256,[HH, HH, ...]
 }
 
-# offset, name, bus, node, func, addr, num, [val]
+# Hold Register Definition
+# offset, name, bus, node, addr, size
 # offset: offset of the modbus server
 # name: sensor description
-# bus: [1,2]
+# bus: bus number, valid in [1,2]
 # node: node id
-# func: supported func number
-# addr: sensor register address
-# num: sensor register register length
-# [val]
+# addr: register address in real sensor
+# size: register size in real sensor
 SENSORMAP = [
-#    reg, description,      bus, node, addr, size, default
-    [0,   'wind speed',     1,   1,    0,    2,    [0, 0]],
-    [2,   'wind direction', 1,   2,    0,    2,    [0, 0]],
-    [4,   'temp and herm',  1,   3,    0,    4,    [0, 0, 0, 0]],
-    [8,   'window',         1,   4,    0,    6,    [0, 0, 0, 0, 0, 0]]
+#    reg, description,      bus, node, addr, size
+    [0,   'wind speed',     1,   1,    0,    2],
+    [2,   'wind direction', 1,   2,    0,    2],
+    [4,   'temp and herm',  1,   3,    0,    4],
+    [8,   'window',         1,   4,    0,    6],
 ]
 
 
@@ -187,7 +186,7 @@ class SensorManager(object):
             if line.startswith('#') or not line.strip():
                 continue  # comments or empty line
             data = line.split(',').strip()
-            if len(data) != 7:
+            if len(data) != 6:
                 logging.info('ignore illegal line %s' % line)
                 continue
             # TODO: check the correctness
@@ -418,7 +417,7 @@ class SensorManager(object):
     def read_modbus(self, bus, node, cmdstr, timeout=1.0):
         while True:
             self._data_received = b''
-            self._dev.write(cmdstr)
+            self._dev.write_data(cmdstr)
             time.sleep(0.5)
             if self._data_received:
                 return self._data_received
