@@ -173,10 +173,10 @@ class SensorManager(object):
         if not self.cpuid:
             return
 
-        cfg = 'dev%s.conf' % self.cpuid
+        cfg = 'dst%s.conf' % self.cpuid
         if not os.path.exists(cfg):
             logging.info('device config file %s not found' % cfg)
-            cfg = 'devcommon.conf'
+            cfg = 'dstcommon.conf'
             if not os.path.exists(cfg):
                 logging.info('common config file %s not found' % cfg)
                 return
