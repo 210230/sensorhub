@@ -160,9 +160,10 @@ class SensorManager(object):
         self._running = False
         self._data_received = b''
         self._data_to_write = b''
-        self._busy = False
+        self.sensor_data = None
         self._mdbus = None
         self._slave = None
+        self._reg_size = 256
         self._mdbus1 = None
         self._mdbus2 = None
         self._updating = False
@@ -192,6 +193,12 @@ class SensorManager(object):
             # TODO: check the correctness
             self.sensormap.append(data)
 
+        if self.sensormap:
+            #last offset + size + extra 4 bytes
+            len = self.sensormap[-1][0] + self.sensormap[-1][5] + 4
+            if len > self._reg_size:
+                self._reg_size = len
+
         logging.info('updated sensor map from file %s' % cfg)
         for d in self.sensormap:
             logging.info(str(d))
@@ -219,10 +226,8 @@ class SensorManager(object):
         if self._updating:
             return
         try:
-            resp = json.loads(self._data_received.decode())
-            self.update_modbus_db(resp)
+            self.sensor_data = json.loads(self._data_received.decode())
             self._data_received = b''
-            self._busy = False
         except:
             logging.info('invalid message: [%s]' % self._data_received.decode())
             self._data_received = b''
@@ -380,69 +385,40 @@ class SensorManager(object):
             self._updating = False
             os.unlink(UPGRADE_CONF_FILENAME)
 
-    def is_busy(self):
-        return self._busy
+     def read_cpuid(self):
+        timeout = 2
+        while timeout > 0:
+            self.sensor_data = None
+            self._dev.write_data('get_cpuid_code()')
+            time.sleep(0.5)
+            if self.sensor_data:
+                break
+            timeout -= 0.5
+        if self.sensor_data and 'CPUID' in self.sensor_data:
+            self.cpuid = self.sensor_data['CPUID']
 
-    def update_modbus_db(self, resp):
-        logging.info('update modbus data %s' % resp)
-        if 'CPUID' in resp:
-            self.cpuid = resp['CPUID']
-        if 'data' not in resp:
-            logging.debug('ignore failure message')
-            return
-        logging.debug('New modbus data received')
-        #self._slave.set_values('0', 0, val)
-
-    def read_sensor(self, id):
-        if self._busy:
-            logging.info('reading sensor data while it is busy')
-        self._busy = True
-        timeout = UART_TIMEOUT + 1
-        self.write_data('Get_Sensor_Data(%d)' % id)
-        while self._busy and timeout > 0:
-            time.sleep(1)
-            timeout -= 1
-
-    def raw_read_modbus(self):
-        if self._busy:
-            logging.info('reading sensor data while it is busy')
-        self._busy = True
-        timeout = UART_TIMEOUT + 1
-        self.write_data('read_hold_reg(1, 1, 0, 6)')
-        while self.is_busy() and timeout > 0:
-            time.sleep(1)
-            timeout -= 1
-        return False
-
-    def read_modbus(self, bus, node, cmdstr, timeout=1.0):
-        while True:
-            self._data_received = b''
+    def read_modbus(self, cmdstr, timeout):
+        while timeout > 0:
+            self.sensor_data = None
             self._dev.write_data(cmdstr)
             time.sleep(0.5)
-            if self._data_received:
-                return self._data_received
-            timeout -= 0.5
-            if timeout <= 0:
+            if self.sensor_data:
                 break
-        return None
+            timeout -= 0.5
+        return self.sensor_data
 
-     def read_cpuid(self):
-        self.write_data('get_cpuid_code()')
-        timeout = 2
-        while self.is_busy() and timeout > 0:
+    def do_polling(self, timeout=2.0):
+        # reg, description, bus, node, addr, size
+        for reg, desc, bus, node, addr, size in self.sensormap:
+            cmdstr = 'read_hold_reg(%d,%d,%d,%d)' % (bus, node, addr, size)
+            resp = self.read_modbus(cmdstr, timeout)
+            if resp and 'data' in resp:
+                logging.debug('sensor data %s' % resp)
+                self._slave.set_values('0', reg, resp['data'])
+            else:
+                logging.info('failed to read bus %d, node %d, addr %d, size %d' % (
+                             desc, bus, node, addr, size))
             time.sleep(1)
-            timeout -= 1
-
-    def do_polling(self, sensor_mapping):
-        # bus, node, addr, num, retry, 
-        for bus, node, addr, num in sensor_mapping:
-            resp = self.read_modbus(bus, node, cmdstr, timeout)
-            if resp:
-                if resp[2] == 0x83:
-                    logging.error('read bus:%d, node:%d, addr:%d, num:%d error, code=0x%x',
-                        bus, node, addr, num, resp[3])
-                else:
-                    self.update_modbus_db(resp)
 
     def start_service(self):
         self._running = True
@@ -453,7 +429,7 @@ class SensorManager(object):
         self._mdbus = modbus_tcp.TcpServer()
         self._mdbus.start()
         self._mdbus1 = self._mdbus.add_slave(1)
-        self._mdbus1.add_block('0', cst.HOLDING_REGISTERS, 0, 64)
+        self._mdbus1.add_block('0', cst.HOLDING_REGISTERS, 0, self._reg_size)
         self._slave = self._mdbus.get_slave(1)
         logging.info('MODBUS service is started')
 
@@ -484,25 +460,19 @@ def main():
     sm = SensorManager(UART_PORT, 115200)
 
     try:
-        sm.start_service()
         retry = 3
         while not sm.cpuid and retry > 0:
             sm.read_cpuid()
             retry -= 1
-        if not sm.cpuid:
-            logging.warning('failed to read CPUID, board is broken')
-        else:
+        if sm.cpuid:
             logging.info('CPUID = %s' % sm.cpuid)
             sm.load_config()
+        else:
+            logging.warning('failed to read CPUID, board may be broken')
+        sm.start_service()
         while True:
-            # polling all configured sensors
-            for id, name in ALL_SENSOR_IDS:
-                #sm.read_sensor(id)
-                time.sleep(3)
-                #upload()
-            # check whether we need upgrade ext board
+            sm.do_polling()
             sm.check_upgrade()
-            sm.raw_read_modbus()
     except KeyboardInterrupt:
         logging.info('Exiting sensor hub service...')
         sm.stop_service()
