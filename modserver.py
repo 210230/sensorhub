@@ -32,34 +32,28 @@ EXT_BOARD_STS = 22 # light the LED
 PIN_4G_EN = 13
 PIN_4G_RST = 6
 
-ALL_SENSOR_IDS =[
-#    (1, "wind direction"),
-#    (2, "wind speed"),
-#    (3, "temp"),
-    (1, "test"),
-]
-
-# register map of device
-
-
 # upload JSON format, from device to server.
 # service should response with download_message when necessary.
 upload_message_default = {
-   "device": "dst18011234",  # device ID, 'dst' + 'year/month' + 'HHHH'
+   "device": "123456781234567812345678",  # device ID, come from CPUID
+   "time":  1234567.89  # time stamp for uploading
    "bus": 1,  # modbus number, valid value: [1, 2]
    "node": 2,  # sensor node id, valid value [1, 247], other value means differently
    "command": "read",  # valid value: ["read", "write"] for now
-   "data": [0x54, 0x48]  # byte array, maxlen=256, [HH, HH, ...]
+   "data": [12, 34, 0.56, 7, 890, 1024]  # byte array, maxlen=256, [HH, HH, ...]
+   "status": 0  # error code
 }
 # download JSON format, from server to device.
 # device will response with {"status": 0/err_cod} in addition with original download_message,
 # server needs to check the status and retry when necessary.
 download_message_default = {
-   "device": "dst18011234",  # device ID, 'dst' + 'year/month' + 'HHHH'
+   "device": "123456781234567812345678",  # device ID, come from CPUID
+   "time": 1234567.89   # time stamp for downloading
    "bus": 1,  # modbus number, valid value: [1, 2]
    "node": 2,  # sensor node id, valid value [1, 247], other value means differently
    "command": "write",  # valid value: ["read", "write"] for now
-   "data": [0x54, 0x48]  # byte array, maxlen=256,[HH, HH, ...]
+   "data": [12, 34, 0.56, 7, 890, 1024]  # byte array, maxlen=256, [HH, HH, ...]
+   "status": 0  # error code
 }
 
 # Hold Register Definition
@@ -86,15 +80,6 @@ DEFAULT_IMAGE = "default_image.bin"
 
 # setup logger according to running method
 parser = OptionParser()
-parser.add_option("-q", "--quiet",
-                  action="store_true", dest="quiet", default=False,
-                  help="write message to log file instead of printing to stdout")
-parser.add_option("-n", "--no-4g",
-                  action="store_true", dest="no_4g", default=False,
-                  help="no 4G modem connection")
-parser.add_option("-p", "--no-openvpn",
-                  action="store_true", dest="no_openvpn", default=False,
-                  help="no openvpn connection")
 parser.add_option("-v", "--verbose",
                   action="store_true", dest="verbose", default=False,
                   help="verbose logging")
@@ -106,7 +91,7 @@ logging.basicConfig(level=debug_level,
                     datefmt='%m-%d %H:%M',
                     filename='/var/log/sensorhub.log', # TODO: avoid overwritten
                     filemode='w')
-if not options.quiet:
+if options.verbose:
     # define a Handler which writes DEBUG messages or higher to the sys.stderr
     console = logging.StreamHandler()
     console.setLevel(debug_level)
