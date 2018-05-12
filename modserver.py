@@ -36,11 +36,11 @@ PIN_4G_RST = 6
 # service should response with download_message when necessary.
 upload_message_default = {
    "device": "123456781234567812345678",  # device ID, come from CPUID
-   "time":  1234567.89  # time stamp for uploading
+   "time":  1234567.89,  # time stamp for uploading
    "bus": 1,  # modbus number, valid value: [1, 2]
    "node": 2,  # sensor node id, valid value [1, 247], other value means differently
    "command": "read",  # valid value: ["read", "write"] for now
-   "data": [12, 34, 0.56, 7, 890, 1024]  # byte array, maxlen=256, [HH, HH, ...]
+   "data": [12, 34, 0.56, 7, 890, 1024],  # byte array, maxlen=256, [HH, HH, ...]
    "status": 0  # error code
 }
 # download JSON format, from server to device.
@@ -48,11 +48,11 @@ upload_message_default = {
 # server needs to check the status and retry when necessary.
 download_message_default = {
    "device": "123456781234567812345678",  # device ID, come from CPUID
-   "time": 1234567.89   # time stamp for downloading
+   "time": 1234567.89,   # time stamp for downloading
    "bus": 1,  # modbus number, valid value: [1, 2]
    "node": 2,  # sensor node id, valid value [1, 247], other value means differently
    "command": "write",  # valid value: ["read", "write"] for now
-   "data": [12, 34, 0.56, 7, 890, 1024]  # byte array, maxlen=256, [HH, HH, ...]
+   "data": [12, 34, 0.56, 7, 890, 1024],  # byte array, maxlen=256, [HH, HH, ...]
    "status": 0  # error code
 }
 
@@ -170,9 +170,9 @@ class SensorManager(object):
             if not os.path.exists(cfg):
                 logging.info('common config file %s not found' % cfg)
                 return
-         #    reg, description,      bus, node, addr, size, default
-         self.sensormap = []
-         for line in file(cfg):
+        #    reg, description,      bus, node, addr, size, default
+        self.sensormap = []
+        for line in file(cfg):
             if line.startswith('#') or not line.strip():
                 continue  # comments or empty line
             data = line.split(',').strip()
@@ -376,7 +376,7 @@ class SensorManager(object):
             self._updating = False
             os.unlink(UPGRADE_CONF_FILENAME)
 
-     def read_cpuid(self):
+    def read_cpuid(self):
         timeout = 2
         while timeout > 0:
             self.sensor_data = None
