@@ -170,7 +170,7 @@ class SensorManager(object):
             if not os.path.exists(cfg):
                 logging.info('common config file %s not found' % cfg)
                 return
-        #    reg, description,      bus, node, addr, size, default
+        # reg, description, bus, node, addr, size, default
         self.sensormap = []
         for line in file(cfg):
             if line.startswith('#') or not line.strip():
